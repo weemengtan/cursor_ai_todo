@@ -5,64 +5,63 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Trash2, Edit3, Check, X, Plus } from "lucide-react"
-
-interface Task {
-  id: number
-  text: string
-  completed: boolean
-  editing: boolean
-}
+import { Trash2, Edit3, Check, X, Plus, Loader2 } from "lucide-react"
+import { useTodos, type Task } from "@/lib/useTodos"
+import FirebaseDebug from "@/components/FirebaseDebug"
 
 export default function TodoApp() {
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: 1, text: "Learn React", completed: true, editing: false },
-    { id: 2, text: "Build a todo app", completed: false, editing: false },
-    { id: 3, text: "Deploy to production", completed: false, editing: false },
-  ])
+  const {
+    tasks,
+    loading,
+    error,
+    addTask,
+    deleteTask,
+    toggleComplete,
+    startEditing,
+    saveEdit,
+    cancelEdit,
+  } = useTodos()
+
   const [newTask, setNewTask] = useState("")
   const [editingText, setEditingText] = useState("")
 
-  const addTask = () => {
+  const handleAddTask = async () => {
     if (newTask.trim() !== "") {
-      const newTaskObj: Task = {
-        id: Date.now(),
-        text: newTask.trim(),
-        completed: false,
-        editing: false,
-      }
-      setTasks([...tasks, newTaskObj])
+      await addTask(newTask)
       setNewTask("")
     }
   }
 
-  const deleteTask = (id: number) => {
-    setTasks(tasks.filter((task) => task.id !== id))
+  const handleStartEditing = async (task: Task) => {
+    await startEditing(task.id)
+    setEditingText(task.text)
   }
 
-  const toggleComplete = (id: number) => {
-    setTasks(tasks.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task)))
-  }
-
-  const startEditing = (id: number, currentText: string) => {
-    setTasks(tasks.map((task) => (task.id === id ? { ...task, editing: true } : task)))
-    setEditingText(currentText)
-  }
-
-  const saveEdit = (id: number) => {
+  const handleSaveEdit = async (id: string) => {
     if (editingText.trim() !== "") {
-      setTasks(tasks.map((task) => (task.id === id ? { ...task, text: editingText.trim(), editing: false } : task)))
+      await saveEdit(id, editingText)
       setEditingText("")
     }
   }
 
-  const cancelEdit = (id: number) => {
-    setTasks(tasks.map((task) => (task.id === id ? { ...task, editing: false } : task)))
+  const handleCancelEdit = async (id: string) => {
+    await cancelEdit(id)
     setEditingText("")
   }
 
   const completedCount = tasks.filter((task) => task.completed).length
   const totalCount = tasks.length
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Loading your todos...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
@@ -78,9 +77,17 @@ export default function TodoApp() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
+        {/* Debug Panel - Remove this in production */}
+        <FirebaseDebug />
+        
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl text-center">My Tasks</CardTitle>
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3 mt-2">
+                <p className="text-red-600 text-sm">{error}</p>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Add New Task */}
@@ -92,12 +99,12 @@ export default function TodoApp() {
                 onChange={(e) => setNewTask(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    addTask()
+                    handleAddTask()
                   }
                 }}
                 className="flex-1"
               />
-              <Button onClick={addTask} className="px-4">
+              <Button onClick={handleAddTask} className="px-4">
                 <Plus className="w-4 h-4 mr-2" />
                 Add
               </Button>
@@ -132,18 +139,18 @@ export default function TodoApp() {
                             onChange={(e) => setEditingText(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
-                                saveEdit(task.id)
+                                handleSaveEdit(task.id)
                               } else if (e.key === "Escape") {
-                                cancelEdit(task.id)
+                                handleCancelEdit(task.id)
                               }
                             }}
                             className="flex-1"
                             autoFocus
                           />
-                          <Button size="sm" onClick={() => saveEdit(task.id)} className="px-2">
+                          <Button size="sm" onClick={() => handleSaveEdit(task.id)} className="px-2">
                             <Check className="w-4 h-4" />
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => cancelEdit(task.id)} className="px-2">
+                          <Button size="sm" variant="outline" onClick={() => handleCancelEdit(task.id)} className="px-2">
                             <X className="w-4 h-4" />
                           </Button>
                         </div>
@@ -164,7 +171,7 @@ export default function TodoApp() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => startEditing(task.id, task.text)}
+                          onClick={() => handleStartEditing(task)}
                           className="px-2 hover:bg-blue-50"
                         >
                           <Edit3 className="w-4 h-4" />
@@ -195,7 +202,7 @@ export default function TodoApp() {
               <span className="font-medium">{completedCount}</span> of <span className="font-medium">{totalCount}</span>{" "}
               tasks completed
             </div>
-            <div className="text-sm text-gray-500">Built with React & shadcn/ui</div>
+            <div className="text-sm text-gray-500">Built with React, Firebase & shadcn/ui</div>
           </div>
           {totalCount > 0 && (
             <div className="mt-4">
